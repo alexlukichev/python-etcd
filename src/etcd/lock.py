@@ -73,7 +73,7 @@ class Lock(object):
             self.client.write(self.lock_key, self.uuid, ttl=lock_ttl)
 
         # now get the owner of the lock, and the next lowest sequence
-        return self._acquired(blocking=blocking, timeout=timeout)
+        return self._acquired(blocking=blocking)
 
     def release(self):
         """
