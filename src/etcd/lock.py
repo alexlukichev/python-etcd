@@ -102,32 +102,35 @@ class Lock(object):
         return False
 
     def _acquired(self, blocking=True):
-        locker, nearest = self._get_locker()
-        self.is_taken = False
-        if self.lock_key == locker:
-            _log.debug("Lock acquired!")
-            # We own the lock, yay!
-            self.is_taken = True
-            return True
-        else:
+        while True:
+            locker, nearest = self._get_locker()
             self.is_taken = False
-            if not blocking:
-                return False
-            # Let's look for the lock
-            watch_key = nearest.key
-            _log.debug("Lock not acquired, now watching %s", watch_key)
-            try:
-                r = self.client.watch(watch_key, timeout=0, index=nearest.modifiedIndex + 1)
-                _log.debug("Detected variation for %s: %s", r.key, r.action)
-                return self._acquired(blocking=True)
-            except etcd.EtcdKeyNotFound:
-                _log.debug("Key %s not present anymore, moving on", watch_key)
-                return self._acquired(blocking=True)
-            except etcd.EtcdLockExpired as e:
-                raise e
-            except etcd.EtcdException:
-                _log.exception("Unexpected exception")
-                raise e
+            if self.lock_key == locker:
+                _log.debug("Lock acquired!")
+                # We own the lock, yay!
+                self.is_taken = True
+                return True
+            else:
+                self.is_taken = False
+                if not blocking:
+                    return False
+                # Let's look for the lock
+                watch_key = nearest.key
+                _log.debug("Lock not acquired, now watching %s", watch_key)
+                try:
+                    r = self.client.watch(watch_key, timeout=1, index=nearest.modifiedIndex + 1)
+                    _log.debug("Detected variation for %s: %s", r.key, r.action)
+                    return self._acquired(blocking=True)
+                except etcd.EtcdWatchTimedOut:
+                    continue
+                except etcd.EtcdKeyNotFound:
+                    _log.debug("Key %s not present anymore, moving on", watch_key)
+                    return self._acquired(blocking=True)
+                except etcd.EtcdLockExpired as e:
+                    raise e
+                except etcd.EtcdException:
+                    _log.exception("Unexpected exception", exc_info=True)
+                    raise
 
     @property
     def lock_key(self):
