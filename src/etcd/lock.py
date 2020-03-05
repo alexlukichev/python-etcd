@@ -128,6 +128,10 @@ class Lock(object):
                     return self._acquired(blocking=True)
                 except etcd.EtcdLockExpired as e:
                     raise e
+                except etcd.EtcdEventIndexCleared:
+                    _log.error("etcd index event cleared (key=%s) -- retrying", watch_key)
+                    # try watch again
+                    continue
                 except etcd.EtcdException:
                     _log.exception("Unexpected exception", exc_info=True)
                     raise
